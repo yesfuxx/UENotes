@@ -75,10 +75,6 @@ for (TActorIterator<AActor> It(GetWorld(), AActor::StaticClass()); It; ++It)
 
 +++
 
-
-
-
-
 ### 0.3 SpawnActor And NewObject
 
 ```
@@ -276,6 +272,22 @@ void ARayCastCamera::DoSingleTrace_Implementation(){}
 ```
 
 +++
+
+### 0.15 Actor里的方法
+
+```
+//actor中
+AddActorLocalOffset(FVector(0, 0, 0)); //修改位置
+AddActorLocalRotation(FRotator(0, 90, 0)); //修改旋转
+SetActorEnableCollision(true);
+//StaticMeshActor
+GetStaticMeshComponent()->SetGenerateOverlapEvents(true);
+GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
+```
+
++++
+
+### 0.16 类继承DefalutPawn会有移动组件，Pawn则没有
 
 
 
@@ -573,7 +585,6 @@ DrawDebugLine(GetWorld(), GetActorLocation(), end, FColor::Red);
 1.UINTERFACE(MinimalAPI, meta = (CannotImplementInterfaceInBlueprint))
 2.UFUNCTION(BlueprintImplementableEvents,BlueprintCallable)
 
-// This class does not need to be modified.
 //UINTERFACE(MinimalAPI)
 1.UINTERFACE(MinimalAPI, meta = (CannotImplementInterfaceInBlueprint))
 class UKillableInterface : public UInterface //**UKillableInterface
@@ -583,8 +594,7 @@ class UKillableInterface : public UInterface //**UKillableInterface
 class MYSTUDY_API IKillableInterface //**IKillableInterface
 {
 	GENERATED_BODY()
-//Add interface functions to this class. 
-//This is the class that will be inherited to implement this interface.
+	
 public:
 	//=0表示 纯虚函数。 抽象类不能被实例化，需在子类实现
 	virtual int32 GetTeamNum() const = 0;
@@ -602,11 +612,11 @@ void IKillableInterface::Die(){}
 
 ```
 UINTERFACE(MinimalAPI, meta = (CannotImplementInterfaceInBlueprint))
-class UUndeadInterface : public UKillableInterface//**
+class UUndeadInterface : public UKillableInterface	//***注意区别
 {
 	GENERATED_BODY()
 };
-class MYSTUDY_API IUndeadInterface : public IKillableInterface//**
+class MYSTUDY_API IUndeadInterface : public IKillableInterface	//***
 {
 	GENERATED_BODY()
 public:	
@@ -626,7 +636,87 @@ void IUndeadInterface::Banish()
 }
 ```
 
++++
 
+### 8.3BlueprintNativeEvent
+
+```
+...
+class MYSTUDY_API IOpenableInterface
+{	...
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = Openable)
+		void Open();
+};
+```
+
+```
+UCLASS()
+class MYSTUDY_API ADoor : public AStaticMeshActor, public IOpenableInterface
+{	...	
+	UFUNCTION()
+	//注意重写方法格式 Func_Implementation()
+		virtual void Open_Implementation() override;
+};
+
+void ADoor::Open_Implementation(){}
+
+```
+
+```
+//其他类中可以执行接口的Open方法(绑定该接口的类)
+//判断DoorActor是否实现该接口
+if (DoorActor->GetClass()->ImplementsInterface(UOpenableInterface::StaticClass()))
+{
+	IOpenableInterface::Execute_Open(DoorActor);
+}
+```
+
+
+
+```
+class MYSTUDY_API AInteractingPawn : public ADefaultPawn
+{	...	
+	void TryInteract();
+};
+
+void AInteractingPawn::TryInteract()
+{
+	//获取Pawn内的控制器，看是不是一个PlayerController
+	//Pawn是有可能没有Controller或者是AIController的
+	APlayerController *PC = Cast<APlayerController>(Controller);
+	if (PC)
+	{
+		//获取跟PC绑定的相机控制类，这里是为了获取Ray trace的起终点
+		APlayerCameraManager* camManager = PC->PlayerCameraManager;
+
+		FVector startLoc = camManager->GetCameraLocation();
+		FVector endLoc = startLoc + (camManager->GetActorForwardVector() * 100);
+
+		//这里展示了如何使用Ray Cast 一族函数的一般典型形式
+		//先声明一个FHitResult
+		FHitResult hitResult;
+
+		//使用按物体类型的ray cast
+		//声明一个FCollisionObjectQueryParams
+		FCollisionObjectQueryParams objectQueryParams(FCollisionObjectQueryParams::AllObjects);
+		FCollisionShape shape = FCollisionShape::MakeSphere(25.0f);
+		FCollisionQueryParams queryParams(FName("Interaction"), true, this);
+
+		GetWorld()->SweepSingleByObjectType(hitResult, startLoc, endLoc, FQuat::Identity, objectQueryParams, shape, queryParams);
+		if (hitResult.Actor != nullptr)
+		{
+			if (hitResult.Actor->GetClass()->ImplementsInterface(UInteractableInterface::StaticClass()))
+			{
+				if (IInteractableInterface::Execute_CanInteract(hitResult.Actor.Get()))
+				{
+					IInteractableInterface::Execute_PerformInteract(hitResult.Actor.Get());
+				}
+			}
+		}
+	}
+
+}
+```
 
 
 
