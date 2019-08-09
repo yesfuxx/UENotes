@@ -671,7 +671,7 @@ if (DoorActor->GetClass()->ImplementsInterface(UOpenableInterface::StaticClass()
 }
 ```
 
-
+//.........
 
 ```
 class MYSTUDY_API AInteractingPawn : public ADefaultPawn
@@ -714,7 +714,6 @@ void AInteractingPawn::TryInteract()
 			}
 		}
 	}
-
 }
 ```
 
