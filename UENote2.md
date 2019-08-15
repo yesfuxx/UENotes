@@ -1,5 +1,14 @@
 # 0 补充
 
+### 0.0 一句话要点
+
+```
+类继承自Actor，需要自己创建根节点SceneComponent
+类继承DefalutPawn会有移动组件，Pawn则没有
+```
+
++++
+
 ###  0.1 定时器 和 Tick计算时间
 
 ```
@@ -287,13 +296,71 @@ GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
 
 +++
 
-### 0.16 类继承DefalutPawn会有移动组件，Pawn则没有
+### 0.16 overlap动态绑定
+
+```
+class UBoxComponent* Trigger;
+
+//UPrimitiveComponent 查找beginoverlap 找到代理
+//begin6个参数 end4个参数 
+void TriggerBeginOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult &SweepResult);
 
 
+//设置碰撞属性
+Trigger->SetGenerateOverlapEvents(true);
+Trigger->SetCollisionProfileName(TEXT("OverlapAllDynamic"));
+	
+Trigger->OnComponentBeginOverlap.AddDynamic(this, &AFdy_DoubleOpenDoor::TriggerBeginOverlap);
+```
+
+![](C:\Users\1\Desktop\S{_0F7WR`5R5}RI9PCMYUSN.png)
+
+
+
+![](C:\Users\1\Desktop\AN7_FKCR(J$IR2J95OK(J@H.png)
 
 +++
 
-# 1.日志
+### 0.17 
+
+```
+#if WITH_EDITOR
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+#endif
+
+
+#if WITH_EDITOR
+void AAnything::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	if (PropertyChangedEvent.Property != nullptr)
+	{
+		const FName pName(PropertyChangedEvent.Property->GetFName());
+		if (pName == GET_MEMBER_NAME_CHECKED(AAnything, ShapeType) && bUseInEditorRefresh)
+		{
+			RefreshShape();
+		}
+	}
+
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+}
+#endif
+
+void AAnything::RefreshShape()
+{
+	switch (ShapeType)
+	{
+	case Shape_Ball:
+		GetStaticMeshComponent()->SetStaticMesh(MeshArray[Shape_Ball]);
+		break;
+	}
+}
+```
+
+
+
+
+
+# 1. 日志
 
 ### 1.1 自定义日志类型
 
@@ -330,7 +397,7 @@ GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Green, FString::Printf(TEXT("
 
 
 
-# 2.UClass
+# 2. UClass
 
 ```
 #include "xxx.generated.h" //这个头文件是必须的并且是最后一行#include，否则报错。用于蓝图反射。
@@ -416,7 +483,7 @@ GEngine->ForceGarbageCollection(true);
 
 
 
-# 3.Memory And Smart Pointer
+# 3. Memory And Smart Pointer
 
 ### 3.1 声明
 
@@ -455,6 +522,7 @@ FGameData &dataRef = *GameDataPtr;
 FGameData* temp = GameDataPtr.Get();
 
 GameDataPtr.Reset();//清空
+GameDataPtr.IsValid()//判断指针是否有效
 ```
 
 ------
@@ -468,8 +536,6 @@ GameDataWeakPtr = GameDataPtr;
 
 //弱指针 调用指向对象的成员函数
 GameDataWeakPtr.Pin()->GetNumber()
-
-GameDataWeakPtr.IsValid()//判断指针是否有效
 ```
 
 ------
@@ -559,7 +625,7 @@ PlayerInputComponent->BindAction("Fire", IE_Pressed, this, &AWarrior::OnFire);
 
 +++
 
-# 7.RayCast
+# 7. RayCast
 
 ```
 UPROPERTY(EditAnywhere, Category = CollisionPro)
@@ -576,7 +642,7 @@ DrawDebugLine(GetWorld(), GetActorLocation(), end, FColor::Red);
 
 +++
 
-# 8*.Interface
+# 8*. Interface
 
 ### 8.1
 
@@ -638,7 +704,7 @@ void IUndeadInterface::Banish()
 
 +++
 
-### 8.3BlueprintNativeEvent
+### 8.3 BlueprintNativeEvent
 
 ```
 ...
@@ -717,15 +783,201 @@ void AInteractingPawn::TryInteract()
 }
 ```
 
++++
+
+# 9*. Timeline
 
 
 
+```
+四种事件类型: 事件 浮点 向量 颜色
+FOnTimelineEvent 
+FOnTimelineFloat
+FOnTimelineVector
+FOnTimelineLinearColor
+```
 
 
 
+```
+UPROPERTY()// Timeline组件
+	UTimelineComponent* SwingOpen;
+
+UPROPERTY(EditAnywhere)// 曲线资源变量
+	UCurveFloat* DoorMovementCurve;
+
+UFUNCTION()// 曲线处理回调函数
+	void TML_DoorOpenReturn(float value);
+
+//代理事件类型 声明
+FOnTimelineFloat OnInterpDoorOpen;
+```
 
 
 
+```
+//1.代理需要 绑定方法 
+OnInterpDoorOpen.BindUFunction(this, FName("TML_DoorOpenReturn"));
+
+//2.代理的方法
+void AFdy_DoubleOpenDoor::TML_DoorOpenReturn(float value){ ... }
+
+//3.注册到Timeline组件上，该方法参数为 曲线资源 和 代理，将两者整合。其它略。
+DoorTimeline->AddInterpFloat(DoorMovementCurve, OnInterpDoorMovement);
+
+//Timeline播放，有很多方法，略。
+SwingOpen->Play();
+```
+
+
+
++++
+
+# 10. 动态材质
+
+```
+UPROPERTY(Transient)
+	UMaterialInstanceDynamic* SwitchMID;
+	
+//第一种赋值方式
+UMaterialInterface *mat = GetStaticMeshComponent()->GetMaterial(2);
+SwitchMID = UMaterialInstanceDynamic::Create(mat, this);
+GetStaticMeshComponent()->SetMaterial(2, SwitchDMI);
+//第二种
+SwitchMID = GetStaticMeshComponent()->CreateAndSetMaterialInstanceDynamic(2);
+
+
+if (SwitchMID)
+{
+	//常用的值设置有三种，float，vector，texture
+	SwitchMID->SetScalarParameterValue(FName("state"), 0.0f);
+	//SetVectorParameterValue(); 
+	//SetTextureParameterValue();
+	
+}
+```
+
++++
+
+# 11. UI
+
+### 11.1 HUD
+
+```
+class MYSTUDY_API ACustomHUD : public AHUD
+{
+	GENERATED_BODY()
+public:
+	virtual void DrawHUD() override;
+};
+```
+
+```
+void ACustomHUD::DrawHUD()
+{
+	Super::DrawHUD();
+	Canvas->DrawText(GEngine->GetLargeFont(), TEXT("来一段中文"), 0, 200, 2, 2);
+	FCanvasBoxItem ProgressBar(FVector2D(150.0f, 150.0f), FVector2D(100.0f, 5.0f));
+	Canvas->DrawItem(ProgressBar);
+	DrawRect(FLinearColor::Blue, 150.0f, 150.0f, 100.0f, 5.0f);
+}
+```
+
++++
+
+### 11.2 State
+
+```
+//在项目build.cs中 添加依赖 Slate 和 SlateCore
+PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "Slate", "SlateCore"});
+```
+
+```
+class MYSTUDY_API ACustomPlayerController : public APlayerController
+{
+	GENERATED_BODY()	
+public:
+	TSharedPtr<SVerticalBox> Widget;
+	TSharedPtr<STextBlock> TextBlock;
+	
+	//* 添加并显示数据绑定Button到屏幕 */
+	UFUNCTION(BlueprintCallable)
+		void AddAndShowDataBindingButton();
+		
+	UFUNCTION()
+		FText GetButtonLable();
+
+	UFUNCTION(BlueprintCallable)
+		void ShowAndHidWidget(bool isShow);
+	
+	FReply ButtonClicked();
+};
+```
+
+```
+void ACustomPlayerController::AddAndShowDataBindingButton()
+{
+	Widget = SNew(SVerticalBox) 
+		+ SVerticalBox::Slot()
+		.HAlign(HAlign_Fill)
+		.VAlign(VAlign_Fill)
+		.Padding(0.f, 100.f, 50.f, 100.f)
+		[
+			SNew(SButton)
+			.HAlign(HAlign_Center)
+			.Content()
+			[
+				SNew(STextBlock)
+				.Text(FText::FromString(TEXT("Test Button")))
+			]
+		] 
+		+ SVerticalBox::Slot()
+		.HAlign(HAlign_Fill)
+		.VAlign(VAlign_Fill)
+		.Padding(50.0f, 100.0f, 50.0f, 100.0f)
+		[
+			//SNew 创建临时变量
+			SNew(SButton)
+			//Button 添加点击事件
+			.OnClicked(FOnClicked::CreateUObject(this, &ACustomPlayerController::ButtonClicked))
+			.Content()
+			[
+				//SAssignNew 可以赋值给变量保存
+				SAssignNew(TextBlock, STextBlock)
+				//数据绑定
+		.Text(TAttribute<FText>::Create(TAttribute<FText>::FGetter::CreateUObject(this, &ACustomPlayerController::GetButtonLable)))
+			]
+		] 
+	//添加到视口
+	GEngine->GameViewport->AddViewportWidgetForPlayer(GetLocalPlayer(), Widget.ToSharedRef(), 1);
+	//移除
+	//GEngine->GameViewport->RemoveViewportWidgetForPlayer(GetLocalPlayer(), Widget.ToSharedRef());
+}
+
+FReply ACustomPlayerController::ButtonClicked()
+{
+	UE_LOG(LogTemp, Warning, TEXT("ButtonClicked"));
+	TextBlock->SetText(FString(TEXT("ButtonClicked")));
+	return FReply::Handled();
+}
+
+FText ACustomPlayerController::GetButtonLable()
+{
+	FVector actorLocation = GetPawn()->GetActorLocation();
+	return FText::FromString(FString::Printf(TEXT("%s"), *actorLocation.ToString()));
+}
+
+void ACustomPlayerController::ShowAndHidWidget(bool isShow)
+{
+	if (Widget.IsValid())
+	{
+		if (isShow)
+			Widget->SetVisibility(EVisibility::Visible);
+		else
+			Widget->SetVisibility(EVisibility::Hidden);		
+	}
+}
+```
 
 
 
