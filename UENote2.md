@@ -84,7 +84,7 @@ for (TActorIterator<AActor> It(GetWorld(), AActor::StaticClass()); It; ++It)
 
 +++
 
-### 0.3 SpawnActor And NewObject
+### 0.3* SpawnActor And NewObject
 
 ```
 MyActor = GetWorld()->SpawnActor<AOneActor>(AOneActor::StaticClass(), SpawnTransform);	
@@ -356,7 +356,14 @@ void AAnything::RefreshShape()
 }
 ```
 
++++
 
+### 0.18 BlueprintImplementEvent and BlueprintNativeEvent
+
+```
+前者表示，这个成员函数由其蓝图的子类实现，不应该尝试在c++中给出函数的实现。
+后者表示，这个成员函数提供一个“c++的默认实现”，同时可以被蓝图重载。需要提供一个“函数名_Implement”为名字的函数实现，放置于.cpp中。
+```
 
 
 
